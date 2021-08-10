@@ -1,25 +1,25 @@
 package main
 
 import (
-    "fmt"
-    "log"
-    "net/http"
-	"io/ioutil"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
 )
 
 // Movie Object
 type Movie struct {
-	ID				string `json:"id"`
-	Title			string `json:"title"`
-	Description		string `json:"description"`
-	Director		string `json:"director"`
-	Producer		string `json:"producer"`
-	ReleaseDate		string `json:"release_date"`
-	RtScore			string `json:"rt_score"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Director    string `json:"director"`
+	Producer    string `json:"producer"`
+	ReleaseDate string `json:"release_date"`
+	RtScore     string `json:"rt_score"`
 }
 
-// Species Response Object 
+// Species Response Object
 type SpeciesResponseObject struct {
 	ID             string   `json:"id"`
 	Name           string   `json:"name"`
@@ -50,7 +50,7 @@ type MovieResponseObject struct {
 	URL                    string   `json:"url"`
 }
 
-func queryAPI(url string) []byte {
+func queryAPI(url string) ([]byte, int) {
 	/* Given an URL, queries it and returns the body. */
 
 	res, err := http.Get(url)
@@ -66,7 +66,7 @@ func queryAPI(url string) []byte {
 		log.Fatal(err)
 	}
 
-	return data
+	return data, res.StatusCode
 }
 
 func queryMovies(moviesURLs []string) []Movie {
@@ -76,59 +76,64 @@ func queryMovies(moviesURLs []string) []Movie {
 
 	for _, movieURL := range moviesURLs {
 		// Querying Ghibli API for each movie
-		data := queryAPI(movieURL)
+		data, _ := queryAPI(movieURL)
 		var movieResponseObject MovieResponseObject
 		json.Unmarshal(data, &movieResponseObject)
 
 		// Appeding movies as Movie struct
 		movies = append(movies, Movie{
-			ID: movieResponseObject.ID,
-			Title: movieResponseObject.Title,
+			ID:          movieResponseObject.ID,
+			Title:       movieResponseObject.Title,
 			Description: movieResponseObject.Description,
-			Director: movieResponseObject.Director,
-			Producer: movieResponseObject.Producer,
+			Director:    movieResponseObject.Director,
+			Producer:    movieResponseObject.Producer,
 			ReleaseDate: movieResponseObject.ReleaseDate,
-			RtScore: movieResponseObject.RtScore,
+			RtScore:     movieResponseObject.RtScore,
 		})
 	}
 
 	return movies
 }
 
-func getMovies(w http.ResponseWriter, r *http.Request){
+func getMovies(w http.ResponseWriter, r *http.Request) {
 	/* Given a species id as parameter, returns the list of movies that this species appears on. */
 	w.Header().Set("Content-Type", "application/json")
 
 	// Getting param species
 	species, ok := r.URL.Query()["species"]
-    if !ok {
+	if !ok {
 		if len(species) < 1 {
 			log.Println("Url Param 'species' is missing")
 		} else if len(species) > 1 {
 			log.Println("Url Param 'species' is supposed to be only one value")
 		}
-        return
-    }
+		return
+	}
 
 	// Querying Ghibli API for species
-	log.Println("Querying api for species", species[0])	
-	data := queryAPI(fmt.Sprintf("https://ghibliapi.herokuapp.com/species/%s", species[0]))
+	log.Println("Querying api for species", species[0])
+	data, statusCode := queryAPI(fmt.Sprintf("https://ghibliapi.herokuapp.com/species/%s", species[0]))
 	var speciesResponseObject SpeciesResponseObject
 	json.Unmarshal(data, &speciesResponseObject)
 
-	// Querying all movies the species appears on.
-	results := queryMovies(speciesResponseObject.Films)
-
-	json.NewEncoder(w).Encode(results)
+	// Checking if there is the species
+	if statusCode == 404 {
+		log.Println(fmt.Sprintf("Species %s not found", species[0]))
+		json.NewEncoder(w).Encode(fmt.Sprintf("Species %s not found", species[0]))
+	} else {
+		// Querying all movies the species appears on.
+		results := queryMovies(speciesResponseObject.Films)
+		json.NewEncoder(w).Encode(results)
+	}
 }
 
 func handleRequests() {
 	/* Request Handler */
-    http.HandleFunc("/movies", getMovies)
-    log.Fatal(http.ListenAndServe(":8000", nil))
+	http.HandleFunc("/movies", getMovies)
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }
 
 func main() {
 	/* Main Entry Point */
-    handleRequests()
+	handleRequests()
 }
