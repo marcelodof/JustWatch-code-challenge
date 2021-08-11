@@ -57,13 +57,13 @@ func queryAPI(url string) ([]byte, int) {
 
 	// Checking for errors in the GET request
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 
 	// Getting body from response
 	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 
 	return data, res.StatusCode
@@ -101,13 +101,10 @@ func getMovies(w http.ResponseWriter, r *http.Request) {
 
 	// Getting param species
 	species, ok := r.URL.Query()["species"]
-	if !ok {
-		if len(species) < 1 {
-			log.Println("Url Param 'species' is missing")
-		} else if len(species) > 1 {
-			log.Println("Url Param 'species' is supposed to be only one value")
-		}
-		return
+	if !ok || len(species) < 1 {
+		msg := "Url Param 'species' is missing"
+		log.Println(msg)
+		json.NewEncoder(w).Encode(msg)
 	}
 
 	// Querying Ghibli API for species
@@ -118,11 +115,13 @@ func getMovies(w http.ResponseWriter, r *http.Request) {
 
 	// Checking if there is the species
 	if statusCode == 404 {
-		log.Println(fmt.Sprintf("Species %s not found", species[0]))
-		json.NewEncoder(w).Encode(fmt.Sprintf("Species %s not found", species[0]))
+		msg := "Page not found"
+		log.Println(msg)
+		json.NewEncoder(w).Encode(msg)
 	} else {
 		// Querying all movies the species appears on.
 		results := queryMovies(speciesResponseObject.Films)
+		log.Println("Request was successfull")
 		json.NewEncoder(w).Encode(results)
 	}
 }
